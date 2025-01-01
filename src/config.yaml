@@ -1,5 +1,7 @@
 ---
 image-path: "Images"
-output-dir: ""
+output:
+  dir: ""
+  file: "compiled.pdf"
 debug:
   save-md: false

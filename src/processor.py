@@ -1,31 +1,26 @@
-import os
-import re
-import subprocess
-import sys
-import yaml
+import re, subprocess, os
+import config
+from utils import extract_num, format_callout
 
 
-# Order files in the directory
-def extract_num(filename):
-    return int(''.join(filter(str.isdigit, filename)) or 0)
-
-
-def format_callout(match):
-    color = match.group(1).lower()
-    title = match.group(2)
-    content = match.group(3).replace("> ", "").strip()
-
-    return (
-        f'\\begin{{tcolorbox}}[colback={color}!5!white, '
-        f'colframe={color}!75!black, title={title}]\n'
-        f'{content}\n'
-        '\\end{tcolorbox}\n\n'
-    )
+def merge_files(dir):
+    print(f"---\nMerging files for {dir}\n---")
+    with open("merged.md", "w") as merged:
+        merged.write(r"\newpage")
+        for filename in sorted(os.listdir(dir), key=extract_num):
+            if (filename.endswith(".md")):
+                processed_content = preprocess(os.path.join(dir, filename), dir)
+                merged.write(processed_content)
+                merged.write("\n\n")
+                print(f"File merged: {filename}")
+    print("---\nFiles merged successfully.")
 
 
 # Preprocess markdown files from Obsidian
-def preprocess(filepath):
-    image_dir = os.path.join(dir, "Images")
+def preprocess(filepath, dir):
+    if not isinstance(config.IMAGE_DIR, str):
+        raise ValueError(f"Expected config.IMAGE_DIR to be a string, got {type(config.IMAGE_DIR)}.")
+    image_dir = os.path.join(dir, config.IMAGE_DIR)
     image_dir = image_dir.replace("\\", "/")
 
     with open(filepath, "r") as file:
@@ -72,32 +67,13 @@ def preprocess(filepath):
     return processed_content
 
 
-def mdToPdf():
-    # Check if dir exists
-    if not os.path.exists(dir):
-        print(f"Directory {dir} does not exist.")
-        sys.exit(1)
-    print(f"---\nMerging files for {dir}\n---")
-
-    # Merge into one MD file
-    with open(merged_file, "w") as merged:
-        merged.write(r"\newpage")
-        for filename in sorted(os.listdir(dir), key=extract_num):
-            if (filename.endswith(".md")):
-                preprocess(os.path.join(dir, filename))
-                processed_content = preprocess(os.path.join(dir, filename))
-                merged.write(processed_content)
-                merged.write("\n\n")
-                print(f"File merged: {filename}")
-    print("---\nFiles merged successfully.\nGenerating PDF...\n---")
-
-    # Generate PDF using Pandoc
+def make_pdf(dir):
     try:
         course = os.path.basename(dir.strip('/'))
         subprocess.run(
             [
             "pandoc", 
-            merged_file, 
+            "merged.md", 
             "-o", f"{course}.pdf",
             "--pdf-engine=xelatex",
             "-f", "markdown+tex_math_dollars+raw_tex",
@@ -108,27 +84,11 @@ def mdToPdf():
             ], check=True
         )
         print(f"PDF successfully generated!")
-        if not config["debug"]["save-md"]:
-            os.remove(merged_file)
+        if not config.SAVE_MD:
+            os.remove("merged.md")
 
     except FileNotFoundError:
         print(f"Error: Pandoc not found.")
 
     except subprocess.CalledProcessError as e:
         print(f"Error generating PDF: {e}")
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: py md-pdf.py <directory>")
-        sys.exit(1)
-
-    yaml_file = 'config.yaml'
-    with open(yaml_file, 'r') as f:
-        config = yaml.load(f, loader=yaml.FullLoader)
-
-    dir = rf"{sys.argv[1]}"
-    merged_file = "merged.md"
-    pdf = "compiled.pdf"
-
-    mdToPdf()
