@@ -1,12 +1,12 @@
 import re, subprocess, os
 import config
-from utils import extract_num, format_callout
+from utils import extract_num, format_callout, format_math
 
 
 def merge_files(dir):
     print(f"---\nMerging files for {dir}\n---")
     with open("merged.md", "w") as merged:
-        merged.write(r"\newpage")
+        merged.write(r"\newpage" + "\n\n")
         for filename in sorted(os.listdir(dir), key=extract_num):
             if (filename.endswith(".md")):
                 processed_content = preprocess(os.path.join(dir, filename), dir)
@@ -26,7 +26,12 @@ def preprocess(filepath, dir):
     with open(filepath, "r") as file:
         content = file.readlines()
         
-    # Skip the first line
+    # Skip YAML header and first line
+    if content[0].strip() == "---":
+        for i, line in enumerate(content[1:], start=1):
+            if line.strip() == "---":
+                content = content[i+1:]
+                break
     content = content[1:]
     content = ''.join(content)
     
@@ -56,9 +61,13 @@ def preprocess(filepath, dir):
     )
 
     # Math Equations
-    processed_content = re.sub(r'\$\$(.*?)\$\$', lambda match: fr"$${match.group(1)}$$", processed_content, flags=re.DOTALL)
-    processed_content = re.sub(r'align\*', r'aligned', processed_content)
-
+    processed_content = re.sub(
+        r'\$\$\s*\\begin\{align\*?\}(.*?)\\end\{align\*?\}\s*\$\$',
+        lambda m: format_math(m),
+        processed_content,
+        flags=re.DOTALL
+    )
+    
     # Add filename as a header
     filename = os.path.basename(filepath)
     header = f"# {os.path.splitext(filename)[0]}\n\n"
@@ -81,6 +90,7 @@ def make_pdf(dir):
             "-V", "geometry:margin=1in",
             "--toc", "--toc-depth=3",
             "--include-in-header", "TeX/header.tex",
+            # "--verbose"
             ], check=True
         )
         print(f"PDF successfully generated!")
